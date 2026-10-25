@@ -1,25 +1,70 @@
 
-name: EventEase Docker Build
+name: EventEase CI-CD
 
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
-  docker-build:
+  ci:
+    name: Build Docker Image
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Build EventEase image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: false
+
+  deploy:
+    name: Deploy to Windows PC
+    needs: ci
+    runs-on: [self-hosted, Windows, X64]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check Docker Engine
+        shell: powershell
+        run: docker info
+
+      - name: Deploy EventEase
+        shell: powershell
+        run: docker compose up --build -d
+
+      - name: Verify containers
+        shell: powershell
+        run: |
+          docker compose ps
+          if ($LASTEXITCODE -ne 0) {
+            throw "Docker Compose status check failed"
+          }
+
+      - name: Verify website responds
+        shell: powershell
+        run: |
+          $ready = $false
+          for ($i = 0; $i -lt 12; $i++) {
+            try {
+              $response = Invoke-WebRequest -Uri "http://localhost:8080" -UseBasicParsing -TimeoutSec 5
+              if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 400) {
+                $ready = $true
+                break
+              }
+            } catch {
+              Start-Sleep -Seconds 5
+            }
+          }
+          if (-not $ready) {
+            docker compose logs --tail=80
+            throw "EventEase did not return a successful HTTP response"
+          }
+          Write-Host "EventEase is responding on port 8080"
