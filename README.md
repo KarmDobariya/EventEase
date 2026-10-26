@@ -2,6 +2,8 @@
 
 A complete responsive event registration and management system built with HTML, CSS, JavaScript, and PHP with MySQL database.
 
+CI/CD demonstration verified on Windows Docker Desktop.
+
 ## 🚀 Features
 
 ### User Side
